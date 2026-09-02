@@ -1,6 +1,9 @@
 package com.megadetector.bench
 
+import android.content.ContentValues
+import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
@@ -94,7 +97,9 @@ class MainActivity : AppCompatActivity() {
                     // mid-run, and a partial file still carries the curve.
                     if (snap.minutes.size > lastMinuteWritten) {
                         lastMinuteWritten = snap.minutes.size
-                        runCatching { csv.writeText(SustainedBenchmark.toCsv(snap, device)) }
+                        val csvText = SustainedBenchmark.toCsv(snap, device)
+                        runCatching { csv.writeText(csvText) }
+                        runCatching { writeToDownloads(csvText) }
                     }
                     runOnUiThread { output.text = text }
                 }
@@ -105,6 +110,32 @@ class MainActivity : AppCompatActivity() {
             }
             busy = false
         }.start()
+    }
+
+    /**
+     * Mirror the CSV into public Downloads. On a remote device farm there is no
+     * adb, and a farm's file browser can't reach `Android/data` under scoped
+     * storage — Downloads it can, which is the difference between exact numbers
+     * and transcribing a 25-row table out of a screenshot.
+     */
+    private var downloadsUri: android.net.Uri? = null
+
+    private fun writeToDownloads(text: String) {
+        if (Build.VERSION.SDK_INT < 29) return          // pre-scoped-storage: adb is fine
+        val name = "mdv6_sustained.csv"
+        val uri = downloadsUri ?: run {
+            // Drop a stale file from a previous run so the browser shows one entry.
+            contentResolver.delete(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                "${MediaStore.Downloads.DISPLAY_NAME} = ?", arrayOf(name))
+            contentResolver.insert(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                ContentValues().apply {
+                    put(MediaStore.Downloads.DISPLAY_NAME, name)
+                    put(MediaStore.Downloads.MIME_TYPE, "text/csv")
+                })?.also { downloadsUri = it } ?: return
+        }
+        contentResolver.openOutputStream(uri, "wt")?.use { it.write(text.toByteArray()) }
     }
 
     private fun runLatency() {

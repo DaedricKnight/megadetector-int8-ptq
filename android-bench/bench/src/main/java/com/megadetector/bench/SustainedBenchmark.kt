@@ -194,11 +194,14 @@ class SustainedBenchmark(
             thermalNow = THERMAL[thermalStatus().coerceIn(THERMAL.indices)],
             thermalWorst = THERMAL[worstThermal.coerceIn(THERMAL.indices)],
             thermalStart = THERMAL[thermalAtStart.coerceIn(THERMAL.indices)],
-            // Battery temperature lags the SoC but is the only skin-side reading
-            // available without root; >35C at rest means the previous run's heat
-            // has not dissipated.
+            // The OS throttling signal is the definitive one; battery temperature
+            // is a lagging skin-side proxy, but it's all that's available without
+            // root. The 38C threshold is calibrated on this harness: a Pixel 8 Pro
+            // starting at 36.2-36.8C ran minute 1 at 289-301 ms, while at
+            // 39.9-41C it ran 477 ms. A lower bar would fire on every farm device,
+            // since those are permanently charging and so never fully cool.
             startedHot = thermalAtStart > 0 ||
-                (!bStart.tempC.isNaN() && bStart.tempC > 35.0),
+                (!bStart.tempC.isNaN() && bStart.tempC > 38.0),
             batteryStartPct = bStart.pct,
             batteryNowPct = b.pct,
             batteryTempStartC = bStart.tempC,
