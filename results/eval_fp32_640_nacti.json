@@ -1,0 +1,31 @@
+{
+  "summary": {
+    "recall_at_tau": {
+      "animal": 0.7142857142857143,
+      "person": 0.2804878048780488,
+      "vehicle": 0.9652777777777778
+    },
+    "gt_counts": {
+      "animal": 91,
+      "person": 82,
+      "vehicle": 144
+    },
+    "animal_fn_rate": 0.05714285714285714,
+    "images_with_animal": 70
+  },
+  "map": {
+    "map_50_95": 0.5442032771980625,
+    "map_50": 0.6894358641380013,
+    "per_class_ap_50_95": {
+      "animal": 0.5584501591133956,
+      "person": 0.23280100822961786,
+      "vehicle": 0.8413586642511739
+    }
+  },
+  "size_mb": 9.340135,
+  "latency_ms": 33.53722901374567,
+  "tau": 0.2,
+  "n_images": 210,
+  "gt": "val_nacti/instances.json",
+  "providers": "CPUExecutionProvider"
+}

@@ -9,6 +9,7 @@ val/
 
 # ...but measured results are not regenerable without the devices
 !results/*.csv
+!results/*.json
 meta.json.zip
 *.zip
 
