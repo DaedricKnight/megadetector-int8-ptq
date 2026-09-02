@@ -1,0 +1,27 @@
+# Models & data are machine-generated / large — the pipeline is the source of truth.
+# Everything here is reproduced by running the scripts; see README.
+*.onnx
+models/
+calib/
+val/
+*_eval.json
+*.csv
+meta.json.zip
+*.zip
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Android
+android-bench/.gradle/
+android-bench/.kotlin/
+android-bench/**/build/
+android-bench/local.properties
+android-bench/.idea/
+*.iml
+
+# macOS / editors
+.DS_Store

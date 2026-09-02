@@ -1,0 +1,12 @@
+# Core (present in the dev env used to smoke-test the quant plumbing)
+numpy
+onnx
+onnxruntime            # or onnxruntime-gpu / onnxruntime-qnn for device work
+opencv-python
+
+# Export (step 1) — MDV6 YOLO variants are Ultralytics models
+ultralytics
+
+# Optional
+pycocotools            # step 3: mAP@.5 and mAP@.5:.95 (recall/FN work without it)
+onnxconverter-common   # step 1 --fp16 row
