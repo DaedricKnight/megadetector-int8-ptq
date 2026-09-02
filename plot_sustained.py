@@ -23,7 +23,7 @@ import matplotlib.pyplot as plt
 
 # Color follows the entity, never its rank — fixed slot order, assigned by SoC.
 SERIES = [
-    ("Snapdragon 8 Elite", "Galaxy Z Fold", "results/sustained_galaxyzfold_sd8elite_30min.csv",
+    ("Snapdragon 8 Elite", "Galaxy Z Fold8 Ultra", "results/sustained_galaxyzfold_sd8elite_30min.csv",
      "#2a78d6", "#3987e5"),
     ("Tensor G3", "Pixel 8 Pro", "results/sustained_pixel8pro_tensorG3_30min.csv",
      "#eb6834", "#d95926"),
