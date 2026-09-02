@@ -137,6 +137,9 @@ def main():
           f"  ({s['images_with_animal']} imgs w/ animal)")
     print(f"latency (median): {lat:.1f} ms/img  [{args.providers}]")
 
+    # mAP is persisted alongside recall/FN — a number that only ever reaches
+    # stdout can't be audited later, and un-auditable numbers can't be published.
+    mAP = {"map_50_95": None, "map_50": None, "per_class_ap_50_95": None}
     try:
         from pycocotools.coco import COCO
         from pycocotools.cocoeval import COCOeval
@@ -145,11 +148,28 @@ def main():
         if cd is not None:
             e = COCOeval(cg, cd, "bbox")
             e.evaluate(); e.accumulate(); e.summarize()
+            mAP["map_50_95"], mAP["map_50"] = float(e.stats[0]), float(e.stats[1])
             print(f"mAP@.5:.95 / mAP@.5 : {e.stats[0]:.3f} / {e.stats[1]:.3f}")
+
+            # Per-class AP: precision is [T, R, K, A, M]; K is the category axis
+            # in the order of cg.getCatIds(). -1 marks "class absent from GT".
+            per_class = {}
+            cat_ids = cg.getCatIds()
+            for k, cid in enumerate(cat_ids):
+                p = e.eval["precision"][:, :, k, 0, 2]
+                p = p[p > -1]
+                per_class[catid_to_name.get(cid, str(cid))] = (
+                    float(np.mean(p)) if p.size else None)
+            mAP["per_class_ap_50_95"] = per_class
+            print("AP@.5:.95 / class : " + "  ".join(
+                f"{n}={('%.3f' % v) if v is not None else 'n/a'}"
+                for n, v in per_class.items()))
     except ImportError:
         print("mAP              : (install pycocotools for mAP@.5 / mAP@.5:.95)")
 
-    json.dump({"summary": s, "size_mb": size_mb, "latency_ms": lat},
+    json.dump({"summary": s, "map": mAP, "size_mb": size_mb, "latency_ms": lat,
+               "tau": args.tau, "n_images": len(latencies), "gt": args.gt,
+               "providers": args.providers},
               open(os.path.splitext(args.onnx)[0] + "_eval.json", "w"), indent=2)
 
 

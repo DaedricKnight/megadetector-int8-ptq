@@ -9,6 +9,9 @@ val/
 meta.json.zip
 *.zip
 
+# Eval sets are rebuilt by build_eval_from_lila.py — val/, val_nacti/, any val_*
+val_*/
+
 # Python
 __pycache__/
 *.pyc
