@@ -6,6 +6,9 @@ calib/
 val/
 *_eval.json
 *.csv
+
+# ...but measured results are not regenerable without the devices
+!results/*.csv
 meta.json.zip
 *.zip
 

@@ -1,0 +1,20 @@
+# device,Google Pixel 8 Pro · Google Tensor G3
+# provider,ORT CPU (4 threads)
+# frames,1337
+# elapsed_s,421
+# minute1_median_ms,204.4
+# last_minute_median_ms,427.6
+# degradation_pct,109.2
+# thermal_start,NONE
+# thermal_worst,LIGHT
+# started_hot,false
+# charging,true
+# mah_per_1000,n/a (charging)
+minute,frames,fps,median_ms,p90_ms,thermal,battery_pct,battery_temp_c,charge_uah
+1,290,4.83,204.4,210.3,NONE,95,26.5,4304000
+2,233,3.88,257.2,287.8,NONE,95,28.8,4312000
+3,209,3.48,280.8,289.9,NONE,96,31.0,4322000
+4,199,3.32,282.8,349.4,LIGHT,96,33.2,4332000
+5,137,2.28,423.0,499.8,LIGHT,97,34.1,4342000
+6,134,2.23,425.9,500.5,LIGHT,97,35.8,4354000
+7,135,2.25,427.6,499.2,LIGHT,97,37.0,4366000
