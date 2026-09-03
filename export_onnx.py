@@ -23,6 +23,20 @@ import argparse
 import os
 
 
+def _disable_flops_profiling():
+    """Ultralytics prints a FLOPs count via thop on model load. thop 0.1.1 leaves
+    hooks on modules it never registered counters for, which under recent torch
+    raises `'ReLU' object has no attribute 'total_ops'` — RT-DETR trips it and
+    the export dies. The number is cosmetic here, so switch it off rather than
+    pinning a dependency for a log line."""
+    try:
+        import ultralytics.utils.torch_utils as tu
+        tu.get_flops = lambda *a, **k: 0.0
+        tu.get_flops_with_torch_profiler = lambda *a, **k: 0.0
+    except Exception:
+        pass
+
+
 def _ultralytics_model_from_pw(version):
     """Trigger PytorchWildlife's canonical weight download, then load the cached
     .pt with Ultralytics — PW keeps only an AutoBackend/predictor internally
@@ -60,6 +74,7 @@ def main():
     ap.add_argument("--opset", type=int, default=13)   # >=13 for QDQ quantization
     ap.add_argument("--fp16", action="store_true", help="also emit an FP16 copy")
     args = ap.parse_args()
+    _disable_flops_profiling()
 
     if args.pw_version:
         model = _ultralytics_model_from_pw(args.pw_version)

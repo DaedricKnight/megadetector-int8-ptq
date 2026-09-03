@@ -24,7 +24,7 @@ import numpy as np
 import onnxruntime as ort
 
 from mdv6int8.preprocess import preprocess, unletterbox_boxes
-from mdv6int8.decode import decode_v10_topk, decode_raw
+from mdv6int8.decode import decode_v10_topk, decode_raw, decode_rtdetr
 from mdv6int8.metrics import RecallAccumulator
 
 
@@ -32,15 +32,17 @@ def build_session(path, providers):
     return ort.InferenceSession(path, providers=providers)
 
 
-def run_one(sess, in_name, img, imgsz, decoder, conf, nc):
+def run_one(sess, in_name, img, imgsz, decoder, conf, nc, nms_iou=None):
     x, r, (dw, dh) = preprocess(img, imgsz)
     t0 = time.perf_counter()
     out = sess.run(None, {in_name: x})[0]
     dt = (time.perf_counter() - t0) * 1000.0
     if decoder == "topk":
         boxes, scores, classes = decode_v10_topk(out, conf)
+    elif decoder == "rtdetr":
+        boxes, scores, classes = decode_rtdetr(out, conf, imgsz)
     else:
-        boxes, scores, classes = decode_raw(out, conf, nc)
+        boxes, scores, classes = decode_raw(out, conf, nc, nms_iou)
     boxes = unletterbox_boxes(boxes, r, dw, dh)
     return boxes, scores, classes, dt, out.shape
 
@@ -54,7 +56,11 @@ def main():
     ap.add_argument("--tau", type=float, default=0.2, help="operating conf threshold")
     ap.add_argument("--map-conf", type=float, default=0.001, help="low conf floor for mAP")
     ap.add_argument("--imgsz", type=int, default=1280)
-    ap.add_argument("--decoder", choices=["topk", "raw"], default="topk")
+    ap.add_argument("--decoder", choices=["topk", "raw", "rtdetr"], default="topk",
+                    help="topk=YOLOv10 [1,300,6]; raw=YOLOv9 [1,4+nc,N] (use --nms-iou); "
+                         "rtdetr=[1,300,6] normalised cxcywh")
+    ap.add_argument("--nms-iou", type=float, default=None,
+                    help="per-class NMS IoU; required for --decoder raw on YOLOv9")
     ap.add_argument("--providers", default="CPUExecutionProvider")
     ap.add_argument("--limit", type=int, default=0, help="0 = all")
     ap.add_argument("--inspect", metavar="IMG",
@@ -98,7 +104,8 @@ def main():
 
         # τ-thresholded predictions -> recall / FN accounting
         boxes, scores, classes, dt, _ = run_one(
-            sess, in_name, img, args.imgsz, args.decoder, args.tau, len(names))
+            sess, in_name, img, args.imgsz, args.decoder, args.tau, len(names),
+            args.nms_iou)
         latencies.append(dt)
 
         gts = ann_by_img.get(im["id"], [])
@@ -111,7 +118,8 @@ def main():
 
         # low-conf predictions -> COCO detections for mAP
         lb, sc, cl, _, _ = run_one(
-            sess, in_name, img, args.imgsz, args.decoder, args.map_conf, len(names))
+            sess, in_name, img, args.imgsz, args.decoder, args.map_conf, len(names),
+            args.nms_iou)
         name_to_catid = {v: k for k, v in catid_to_name.items()}
         for (x1, y1, x2, y2), s, c in zip(lb, sc, cl):
             cid = name_to_catid.get(names[c]) if 0 <= c < len(names) else None

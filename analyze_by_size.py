@@ -28,7 +28,7 @@ import numpy as np
 import onnxruntime as ort
 
 from mdv6int8.preprocess import preprocess, unletterbox_boxes
-from mdv6int8.decode import decode_v10_topk
+from mdv6int8.decode import decode_v10_topk, decode_raw, decode_rtdetr
 from mdv6int8.metrics import iou_matrix
 
 BUCKETS = [("tiny (<0.5%)", 0.0, 0.005), ("small (0.5-2%)", 0.005, 0.02),
@@ -39,7 +39,8 @@ def bucket_of(frac):
     return next(n for n, lo, hi in BUCKETS if lo <= frac < hi)
 
 
-def evaluate(onnx, gt, images_dir, cat2idx, tau, imgsz, iou_thr):
+def evaluate(onnx, gt, images_dir, cat2idx, tau, imgsz, iou_thr,
+             decoder='topk', nc=3, nms_iou=None):
     sess = ort.InferenceSession(onnx, providers=["CPUExecutionProvider"])
     in_name = sess.get_inputs()[0].name
     imgs = {i["id"]: i for i in gt["images"]}
@@ -57,7 +58,13 @@ def evaluate(onnx, gt, images_dir, cat2idx, tau, imgsz, iou_thr):
         W, H = meta.get("width") or w, meta.get("height") or h
 
         x, r, (dw, dh) = preprocess(img, imgsz)
-        boxes, _, classes = decode_v10_topk(sess.run(None, {in_name: x})[0], tau)
+        raw = sess.run(None, {in_name: x})[0]
+        if decoder == "rtdetr":
+            boxes, _, classes = decode_rtdetr(raw, tau, imgsz)
+        elif decoder == "raw":
+            boxes, _, classes = decode_raw(raw, tau, nc, nms_iou)
+        else:
+            boxes, _, classes = decode_v10_topk(raw, tau)
         boxes = unletterbox_boxes(boxes, r, dw, dh)
 
         for a in anns:
@@ -84,6 +91,8 @@ def main():
     ap.add_argument("--tau", type=float, default=0.2)
     ap.add_argument("--iou", type=float, default=0.5)
     ap.add_argument("--imgsz", type=int, default=1280)
+    ap.add_argument("--decoder", choices=["topk", "raw", "rtdetr"], default="topk")
+    ap.add_argument("--nms-iou", type=float, default=None)
     args = ap.parse_args()
 
     gt = json.load(open(args.gt))
@@ -94,7 +103,8 @@ def main():
     results = {}
     for m in args.models:
         print(f"running {os.path.basename(m)} …")
-        results[m] = evaluate(m, gt, args.images, cat2idx, args.tau, args.imgsz, args.iou)
+        results[m] = evaluate(m, gt, args.images, cat2idx, args.tau, args.imgsz,
+                              args.iou, args.decoder, len(names), args.nms_iou)
 
     base = args.models[0]
     hdr = f"{'GT size bucket':18s} {'n':>4s} " + " ".join(
