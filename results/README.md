@@ -73,7 +73,73 @@ the clean run is the one reported. The two bracket the same conclusion (+91% vs
 alone. Note the clean run ran *hotter* (38.9 vs 34.5 °C) because the battery was
 fast-charging to full — neither run has a fully controlled thermal environment.
 
-## Accuracy: 640 vs 1280
+## Resolution vs precision: which lever actually buys speed
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="pareto_resolution_dark.png">
+  <img alt="Left: mAP@0.5 against desktop CPU latency for FP32 and INT8 at four resolutions; both curves fall as resolution rises, with 640 giving the highest accuracy at the lowest cost. Right: FP32 recall by object size against resolution; large-object recall falls from 0.95 to 0.28 while tiny-object recall rises from 0.28 to 0.44." src="pareto_resolution_light.png">
+</picture>
+
+`sweep_resolution.json` — 640/960/1280/1600 × FP32/INT8 on the same 210-image
+subset, only `--imgsz` changed. Latency is desktop CPU, measured identically
+across rows.
+
+| resolution | precision | mAP@.5 | animal | person | vehicle | animal FN | latency | size |
+|--:|---|--:|--:|--:|--:|--:|--:|--:|
+| **640** | FP32 | **0.689** | 0.714 | **0.280** | **0.965** | 5.7% | 34 ms | 9.3 MB |
+| 640 | INT8 | 0.639 | 0.626 | 0.195 | 0.868 | 14.3% | **21 ms** | **2.8 MB** |
+| **960** | FP32 | 0.678 | 0.769 | 0.244 | 0.938 | 5.7% | 77 ms | 9.6 MB |
+| 960 | INT8 | 0.612 | 0.648 | 0.110 | 0.868 | 17.1% | 42 ms | 3.1 MB |
+| 1280 | FP32 | 0.498 | **0.813** | 0.220 | 0.597 | **4.3%** | 145 ms | 9.8 MB |
+| 1280 | INT8 | 0.425 | 0.736 | 0.073 | 0.514 | 11.4% | 73 ms | 3.3 MB |
+| 1600 | FP32 | 0.393 | 0.802 | 0.183 | 0.396 | 7.1% | 224 ms | 10.2 MB |
+| 1600 | INT8 | 0.358 | 0.769 | 0.061 | 0.354 | 10.0% | 117 ms | 3.7 MB |
+
+**At matched cost, lowering resolution beats quantizing.** `INT8 @ 1280` costs
+73 ms for mAP@.5 0.425; `FP32 @ 960` costs 77 ms for **0.678** — same price,
++59% accuracy and better animal recall. `INT8 @ 960` is dominated outright by
+`FP32 @ 640`, which is cheaper on every column. INT8 still earns its place as
+the only lever that shrinks the *model* (3.3 → 2.8 MB), and it composes with
+resolution — but as an accuracy-per-millisecond trade it loses. `1600` is off
+the frontier on every metric.
+
+**There is no single best resolution.** FP32 recall by ground-truth object size:
+
+| GT object size | 640 | 960 | 1280 | 1600 |
+|---|--:|--:|--:|--:|
+| tiny (<0.5% of frame) | 0.278 | 0.296 | **0.444** | 0.410 |
+| small (0.5–2%) | 0.609 | 0.594 | **0.625** | 0.551 |
+| medium (2–10%) | 0.729 | **0.743** | 0.729 | 0.746 |
+| large (>10%) | **0.946** | 0.922 | 0.488 | 0.281 |
+
+Large and tiny move in opposite directions. Upscaling past the training size
+moves small objects toward the scale the model learned and pushes large ones out
+of it — which is why the framework's 1280 is a defensible trade for distant
+animals (+10 points of animal recall over 640, and the lowest FN-rate in the
+table) rather than simply wrong. It also makes **960 look underrated**: nearly
+all of 640's aggregate accuracy with most of 1280's animal recall, at half the
+cost of 1280.
+
+### On-device, and a hypothesis that failed
+
+Pixel 8 Pro, 30 minutes continuous, INT8, cold start (17.6 °C):
+
+| | 640 | 1280 |
+|---|--:|--:|
+| minute 1 | **55.5 ms** (17.3 fps) | 195.7 ms (5.0 fps) |
+| steady state | **124.7 ms** (8.1 fps) | 399.4 ms (2.5 fps) |
+| frames in 30 min | **17 890** | 5 185 |
+| degradation | +124% | +91% |
+| battery temp | 18.8 → 39.5 °C | 21.1 → 38.9 °C |
+
+**640 does not avoid throttling** — it degrades *more* in relative terms and ends
+slightly hotter. The CPU is pinned at 100% either way, so the heat is the same;
+resolution changes the work done per unit of heat, not the heat. Recorded
+because "use a smaller input to stay cool" is an intuitive and wrong
+optimisation. The absolute gain is real regardless: 3.5× the frames in the same
+half hour.
+
+## Accuracy: 640 vs 1280 (FP32, the original comparison)
 
 `eval_fp32_640_nacti.json` and `eval_fp32_1280_nacti.json` are the same FP32
 model on the same 210-image class-balanced NACTI subset, with only `--imgsz`
@@ -125,3 +191,6 @@ Then one row per elapsed minute:
 | `sustained_pixel8pro_tensorG3_run1_7min.csv` | interrupted warm-start run (26.5 °C) used for the starting-temperature comparison |
 | `sustained_curves_{light,dark}.png` | rendered by `../plot_sustained.py` |
 | `eval_fp32_{640,1280}_nacti.json` | accuracy at both resolutions, written by `../eval.py` |
+| `sweep_resolution.json` | the full 4-resolution × 2-precision sweep, written by `../sweep_resolution.py` |
+| `pareto_resolution_{light,dark}.png` | rendered by `../plot_pareto.py` |
+| `sustained_pixel8pro_tensorG3_640_30min.csv` | the 640 on-device run |
