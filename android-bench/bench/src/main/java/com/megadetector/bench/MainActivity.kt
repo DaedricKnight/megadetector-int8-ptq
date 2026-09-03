@@ -33,6 +33,22 @@ class MainActivity : AppCompatActivity() {
     private var sustained: SustainedBenchmark? = null
     private var busy = false
 
+    /**
+     * The compact checkpoints are trained at 640 while the framework infers at
+     * 1280, and cost scales with pixel count — so the two are worth measuring
+     * side by side rather than picking one. `SUSTAINED` selects which one the
+     * 30-minute run uses; the latency test always does both.
+     */
+    private data class Config(val asset: String, val imgsz: Int) {
+        val label get() = "${imgsz}x$imgsz"
+    }
+
+    private val configs = listOf(
+        Config("mdv6_v10c_int8_640.onnx", 640),
+        Config("mdv6_v10c_int8.onnx", 1280),
+    )
+    private val sustainedConfig = configs.first()   // 640
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -83,7 +99,8 @@ class MainActivity : AppCompatActivity() {
     private fun runSustained() {
         if (busy) return
         busy = true
-        val bench = SustainedBenchmark(this)
+        val bench = SustainedBenchmark(
+            this, assetModel = sustainedConfig.asset, imgsz = sustainedConfig.imgsz)
         sustained = bench
         val device = MdLatencyBenchmark.deviceLabel()
         val csv = File(getExternalFilesDir(null), "mdv6_sustained.csv")
@@ -142,22 +159,34 @@ class MainActivity : AppCompatActivity() {
         if (busy) return
         busy = true
         sustained?.stop()
-        output.text = "${MdLatencyBenchmark.deviceLabel()}\n\nsingle-shot latency, 1–4 min…"
+        output.text = "${MdLatencyBenchmark.deviceLabel()}\n\n" +
+            "latency at ${configs.joinToString(" and ") { it.label }} — a few minutes…"
         Thread {
             val text = runCatching {
-                val b = MdLatencyBenchmark(this)
-                val rows = b.run()
                 buildString {
                     appendLine(MdLatencyBenchmark.deviceLabel())
-                    appendLine("INT8 ${"%.1f".format(b.modelSizeMb())} MB · 1280×1280\n")
-                    appendLine("%-20s %9s %8s".format("provider", "median", "p90"))
-                    appendLine("-".repeat(42))
-                    rows.forEach {
-                        appendLine(
-                            if (it.ok) "%-20s %7.1fms %6.1fms".format(it.provider, it.medianMs, it.p90Ms)
-                            else "%-20s   unavailable".format(it.provider)
-                        )
+                    appendLine()
+                    for (cfg in configs) {
+                        val b = MdLatencyBenchmark(
+                            this@MainActivity, assetModel = cfg.asset, imgsz = cfg.imgsz)
+                        val rows = b.run()
+                        appendLine("INT8 ${"%.1f".format(b.modelSizeMb())} MB · ${cfg.label}")
+                        appendLine("%-20s %9s %8s".format("provider", "median", "p90"))
+                        appendLine("-".repeat(42))
+                        rows.forEach {
+                            appendLine(
+                                if (it.ok) "%-20s %7.1fms %6.1fms"
+                                    .format(it.provider, it.medianMs, it.p90Ms)
+                                else "%-20s   unavailable".format(it.provider)
+                            )
+                        }
+                        appendLine()
+                        // Emit as we go: on a farm the session may end mid-run,
+                        // and the first resolution's table is already useful.
+                        val soFar = toString()
+                        runOnUiThread { output.text = soFar }
                     }
+                    appendLine("(screenshot this - it's the datapoint)")
                 }
             }.getOrElse { "ERROR: ${it.message}" }
             runOnUiThread { output.text = text }
